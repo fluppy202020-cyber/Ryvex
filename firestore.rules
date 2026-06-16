@@ -1,0 +1,265 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isEmailVerified() {
+      return isSignedIn();
+    }
+
+    function isAdmin() {
+      return isEmailVerified() && request.auth.token.email == "fluppy202020@gmail.com";
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // -------------------------------------------------------------------------
+    // VALIDATION BLUEPRINTS (The "Anti-Update-Gap")
+    // -------------------------------------------------------------------------
+
+    function isValidUser(data) {
+      return data.uid is string && isValidId(data.uid)
+        && data.username is string && data.username.size() >= 3 && data.username.size() <= 20
+        && data.email is string && data.email.size() <= 128
+        && data.photoURL is string && data.photoURL.size() <= 500
+        && data.coins is number && data.coins >= 0
+        && data.winsCount is number && data.winsCount >= 0
+        && data.joinedCount is number && data.joinedCount >= 0
+        && data.banned is bool
+        && data.createdAt is string
+        && data.updatedAt is string;
+    }
+
+    function isValidTournament(data) {
+      return data.tournamentId is string && isValidId(data.tournamentId)
+        && data.title is string && data.title.size() >= 3 && data.title.size() <= 100
+        && data.game is string && data.game.size() <= 50
+        && data.status is string && (data.status == 'upcoming' || data.status == 'live' || data.status == 'completed')
+        && data.entryFee is number && data.entryFee >= 5 && data.entryFee <= 20
+        && data.prizePool is number && data.prizePool >= 0
+        && data.scheduledTime is string
+        && data.bannerUrl is string && data.bannerUrl.size() <= 500
+        && data.maxParticipants is number && data.maxParticipants > 0
+        && data.participantIds is list && data.participantIds.size() <= 100
+        && data.participantNames is list && data.participantNames.size() <= 100
+        && data.gameMap is string && data.gameMap.size() <= 50
+        && data.rules is string && data.rules.size() <= 2000
+        && data.createdAt is string
+        && data.updatedAt is string;
+    }
+
+    function isValidCoinTransaction(data) {
+      return data.transactionId is string && isValidId(data.transactionId)
+        && data.userId is string && isValidId(data.userId)
+        && data.amount is number
+        && data.type is string && (
+             data.type == 'signup_bonus' ||
+             data.type == 'daily_bonus' ||
+             data.type == 'ad_reward' ||
+             data.type == 'spin_reward' ||
+             data.type == 'join_fee' ||
+             data.type == 'join_refund' ||
+             data.type == 'tournament_win' ||
+             data.type == 'admin_adjustment' ||
+             data.type == 'tournament_creation'
+           )
+        && data.description is string && data.description.size() <= 500
+        && data.createdAt is string;
+    }
+
+    function isValidSpinHistory(data) {
+      return data.spinId is string && isValidId(data.spinId)
+        && data.userId is string && isValidId(data.userId)
+        && data.rewardAmount is number && data.rewardAmount >= 1
+        && data.createdAt is string;
+    }
+
+    function isValidNotification(data) {
+      return data.notificationId is string && isValidId(data.notificationId)
+        && data.userId is string
+        && data.title is string && data.title.size() <= 100
+        && data.message is string && data.message.size() <= 1000
+        && data.read is bool
+        && data.createdAt is string;
+    }
+
+    function isValidReport(data) {
+      return data.reportId is string && isValidId(data.reportId)
+        && data.userId is string && isValidId(data.userId)
+        && data.username is string && data.username.size() >= 3
+        && data.subject is string && data.subject.size() >= 3 && data.subject.size() <= 100
+        && data.details is string && data.details.size() >= 10 && data.details.size() <= 2000
+        && data.status is string && (data.status == 'open' || data.status == 'resolved')
+        && data.createdAt is string;
+    }
+
+    function isValidAnnouncement(data) {
+      return data.id is string && isValidId(data.id)
+        && data.title is string && data.title.size() <= 100
+        && data.message is string && data.message.size() <= 2000
+        && data.createdAt is string;
+    }
+
+    // Default deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Connection Handshake Test Document
+    match /test-connection-doc-ryvex/{docId} {
+      allow read: if true;
+    }
+
+    // Users Collection
+    match /users/{userId} {
+      allow read: if isSignedIn();
+      
+      allow create: if isEmailVerified() 
+        && isValidUser(incoming())
+        && request.auth.uid == userId 
+        && incoming().uid == request.auth.uid
+        && incoming().coins == 10
+        && incoming().winsCount == 0
+        && incoming().joinedCount == 0
+        && incoming().banned == false
+        && incoming().email == request.auth.token.email;
+
+      allow update: if isEmailVerified() && (
+        isAdmin() || (
+          isValidUser(incoming())
+          && request.auth.uid == userId 
+          && !existing().banned
+          && incoming().uid == existing().uid
+          && incoming().email == existing().email
+          && incoming().winsCount == existing().winsCount
+          && incoming().banned == existing().banned
+          && incoming().createdAt == existing().createdAt
+          && (
+            // Partition actions into Tiered Identity Logic using mutual exclusive keys
+            incoming().diff(existing()).affectedKeys().hasOnly(['username', 'photoURL', 'updatedAt']) ||
+            incoming().diff(existing()).affectedKeys().hasOnly(['coins', 'lastDailyBonus', 'updatedAt']) ||
+            incoming().diff(existing()).affectedKeys().hasOnly(['coins', 'lastVideoAd', 'adWatchCountToday', 'adWatchResetDay', 'updatedAt']) ||
+            incoming().diff(existing()).affectedKeys().hasOnly(['coins', 'lastSpinWheel', 'updatedAt']) ||
+            incoming().diff(existing()).affectedKeys().hasOnly(['coins', 'joinedCount', 'updatedAt'])
+          )
+        )
+      );
+    }
+
+    // Tournaments Collection
+    match /tournaments/{tournamentId} {
+      allow read: if isSignedIn();
+      allow create: if isValidId(tournamentId) && isValidTournament(incoming()) && (
+        isAdmin() || (
+          isSignedIn() &&
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.coins >= 200
+        )
+      );
+      allow delete: if isAdmin();
+      
+      allow update: if isEmailVerified() && isValidTournament(incoming()) && (
+        isAdmin() || (
+          // Normal users can join or leave an upcoming tournament. 
+          // Relies on checking database profile for banned state
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.banned == false
+          && existing().status == "upcoming"
+          && incoming().tournamentId == existing().tournamentId
+          && incoming().title == existing().title
+          && incoming().game == existing().game
+          && incoming().status == existing().status
+          && incoming().entryFee == existing().entryFee
+          && incoming().prizePool == existing().prizePool
+          && incoming().scheduledTime == existing().scheduledTime
+          && incoming().bannerUrl == existing().bannerUrl
+          && incoming().maxParticipants == existing().maxParticipants
+          && incoming().gameMap == existing().gameMap
+          && incoming().rules == existing().rules
+          && incoming().createdAt == existing().createdAt
+          && (incoming().winnerId == existing().winnerId || (incoming().winnerId == null && existing().winnerId == null))
+          && (incoming().winnerName == existing().winnerName || (incoming().winnerName == null && existing().winnerName == null))
+          && incoming().diff(existing()).affectedKeys().hasOnly(['participantIds', 'participantNames', 'updatedAt'])
+        )
+      );
+
+      // Secure Real-Time Chat Subcollection
+      match /chat/{messageId} {
+        allow read: if isEmailVerified();
+        allow create: if isEmailVerified() 
+          && isValidId(messageId)
+          && incoming().userId == request.auth.uid 
+          && incoming().username is string 
+          && incoming().text is string 
+          && incoming().text.size() <= 1000
+          && incoming().createdAt is string;
+      }
+    }
+
+    // Coin Transactions Collection
+    match /transactions/{transactionId} {
+      allow read: if isEmailVerified() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isEmailVerified() 
+        && isValidId(transactionId) 
+        && isValidCoinTransaction(incoming()) 
+        && (incoming().userId == request.auth.uid || isAdmin());
+    }
+
+    // Spin History Collection
+    match /spins/{spinId} {
+      allow read: if isEmailVerified() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isEmailVerified() 
+        && isValidId(spinId) 
+        && isValidSpinHistory(incoming()) 
+        && (incoming().userId == request.auth.uid || isAdmin());
+    }
+
+    // Notifications Collection
+    match /notifications/{notificationId} {
+      allow read: if isEmailVerified() && (resource.data.userId == request.auth.uid || resource.data.userId == "all" || isAdmin());
+      allow create: if isValidId(notificationId) && isValidNotification(incoming()) && (
+        isAdmin() || (isEmailVerified() && incoming().userId == request.auth.uid)
+      );
+      allow update: if isEmailVerified() && isValidNotification(incoming()) && (
+        isAdmin() || (
+          existing().userId == request.auth.uid
+          && incoming().notificationId == existing().notificationId
+          && incoming().userId == existing().userId
+          && incoming().title == existing().title
+          && incoming().message == existing().message
+          && incoming().createdAt == existing().createdAt
+          && incoming().diff(existing()).affectedKeys().hasOnly(['read'])
+        )
+      );
+    }
+
+    // Reports Collection
+    match /reports/{reportId} {
+      allow read: if isEmailVerified() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isEmailVerified() 
+        && isValidId(reportId) 
+        && isValidReport(incoming()) 
+        && incoming().userId == request.auth.uid
+        && incoming().status == "open";
+      allow update: if isAdmin() && isValidReport(incoming());
+    }
+
+    // Announcements Collection
+    match /announcements/{id} {
+      allow read: if isEmailVerified();
+      allow write: if isAdmin() && isValidId(id) && (request.method == 'delete' || isValidAnnouncement(incoming()));
+    }
+  }
+}

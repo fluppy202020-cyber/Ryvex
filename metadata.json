@@ -1,0 +1,6 @@
+{
+  "name": "Ryvex",
+  "description": "Modern esports tournament platform with coins, spin wheel, rewarded ads, leaderboards, notifications, and secure admin system.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,149 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile containing gaming stats, coin wallet balance, state, and permissions.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Unique user ID from Firebase Auth." },
+        "username": { "type": "string", "description": "Display username of the competitor." },
+        "email": { "type": "string", "description": "User email address." },
+        "photoURL": { "type": "string", "description": "User avatar picture URL." },
+        "coins": { "type": "number", "description": "Coin balance of the user." },
+        "winsCount": { "type": "number", "description": "Total tournaments won." },
+        "joinedCount": { "type": "number", "description": "Total tournaments entered." },
+        "lastDailyBonus": { "type": "string", "format": "date-time", "description": "Timestamp of the last daily login bonus." },
+        "lastSpinWheel": { "type": "string", "format": "date-time", "description": "Timestamp of the last spin wheel usage." },
+        "lastVideoAd": { "type": "string", "format": "date-time", "description": "Timestamp of the last rewarded video ad watch." },
+        "adWatchCountToday": { "type": "number", "description": "Number of ads watched today." },
+        "adWatchResetDay": { "type": "string", "description": "Date string for tracking daily ad limits." },
+        "banned": { "type": "boolean", "description": "Whether the user is banned." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Timestamp of profile creation." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Timestamp of the last profile update." }
+      },
+      "required": ["uid", "username", "email", "coins", "winsCount", "joinedCount", "banned", "createdAt"]
+    },
+    "Tournament": {
+      "title": "Tournament",
+      "description": "Esports tournament definition with status, game, entry fee, participants list, and winner details.",
+      "type": "object",
+      "properties": {
+        "tournamentId": { "type": "string", "description": "Unique tournament identifier." },
+        "title": { "type": "string", "description": "Title of the tournament." },
+        "game": { "type": "string", "description": "Esports game being played." },
+        "status": { "type": "string", "enum": ["upcoming", "live", "completed"], "description": "Current state of the tournament." },
+        "entryFee": { "type": "number", "description": "Coins required to join (5-20)." },
+        "prizePool": { "type": "number", "description": "Coins distributed as prize." },
+        "scheduledTime": { "type": "string", "format": "date-time", "description": "Date and time when tournament starts." },
+        "bannerUrl": { "type": "string", "description": "Visual banner image for the tournament." },
+        "maxParticipants": { "type": "number", "description": "Maximum number of slots." },
+        "participantIds": { "type": "array", "description": "List of user UIDs who have joined." },
+        "participantNames": { "type": "array", "description": "List of usernames of joined participants." },
+        "winnerId": { "type": "string", "description": "UID of the winner if completed." },
+        "winnerName": { "type": "string", "description": "Username of the winner." },
+        "gameMap": { "type": "string", "description": "Map played during tournament." },
+        "rules": { "type": "string", "description": "Tournament rules and info." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Timestamp of creation." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Timestamp of last modification." }
+      },
+      "required": ["tournamentId", "title", "game", "status", "entryFee", "prizePool", "scheduledTime", "maxParticipants", "participantIds", "createdAt"]
+    },
+    "CoinTransaction": {
+      "title": "CoinTransaction",
+      "description": "Ledger entry tracking and logging every user coin balance change.",
+      "type": "object",
+      "properties": {
+        "transactionId": { "type": "string", "description": "Unique transaction ID." },
+        "userId": { "type": "string", "description": "Owner of the transaction." },
+        "amount": { "type": "number", "description": "Coins added (+) or subtracted (-)." },
+        "type": { "type": "string", "enum": ["signup_bonus", "daily_bonus", "ad_reward", "spin_reward", "join_fee", "join_refund", "tournament_win", "admin_adjustment"], "description": "Category of ledger modification." },
+        "description": { "type": "string", "description": "Human readable context explanation." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Timestamp of the transaction." }
+      },
+      "required": ["transactionId", "userId", "amount", "type", "description", "createdAt"]
+    },
+    "SpinHistory": {
+      "title": "SpinHistory",
+      "description": "Log of wheel spin events to prevent abuse.",
+      "type": "object",
+      "properties": {
+        "spinId": { "type": "string", "description": "Unique spin record ID." },
+        "userId": { "type": "string", "description": "UID of the spinner." },
+        "rewardAmount": { "type": "number", "description": "Coins awarded from spin." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Timestamp of spin occurrence." }
+      },
+      "required": ["spinId", "userId", "rewardAmount", "createdAt"]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "In-app notifications sent to specific users or broadcast to all.",
+      "type": "object",
+      "properties": {
+        "notificationId": { "type": "string", "description": "Unique notification ID." },
+        "userId": { "type": "string", "description": "UID of targeting user, or 'all' for system broadcasts." },
+        "title": { "type": "string", "description": "Headline of the alert." },
+        "message": { "type": "string", "description": "Body message text." },
+        "read": { "type": "boolean", "description": "Is notification read by user." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Timestamp of dispatch." }
+      },
+      "required": ["notificationId", "userId", "title", "message", "read", "createdAt"]
+    },
+    "Report": {
+      "title": "Report",
+      "description": "User complaints or bug tickets submitted to admin.",
+      "type": "object",
+      "properties": {
+        "reportId": { "type": "string", "description": "Unique report ID." },
+        "userId": { "type": "string", "description": "Reporting user's UID." },
+        "username": { "type": "string", "description": "Reporting user's name." },
+        "subject": { "type": "string", "description": "Headline context." },
+        "details": { "type": "string", "description": "Full text explanation." },
+        "status": { "type": "string", "enum": ["open", "resolved"], "description": "Status of the ticket." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Timestamp of submission." }
+      },
+      "required": ["reportId", "userId", "username", "subject", "details", "status", "createdAt"]
+    },
+    "Announcement": {
+      "title": "Announcement",
+      "description": "Platform-wide banner alerts published by administrators.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "message": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "title", "message", "createdAt"]
+    }
+  },
+  "firestore": {
+    "users/{userId}": {
+      "schema": "User",
+      "description": "Individual profiles for esports players."
+    },
+    "tournaments/{tournamentId}": {
+      "schema": "Tournament",
+      "description": "Competitive events hosted on Ryvex."
+    },
+    "transactions/{transactionId}": {
+      "schema": "CoinTransaction",
+      "description": "Financial logs for user coins."
+    },
+    "spins/{spinId}": {
+      "schema": "SpinHistory",
+      "description": "Audit trail for daily spin wheel rewards."
+    },
+    "notifications/{notificationId}": {
+      "schema": "Notification",
+      "description": "User specific and platform broadcast notifications."
+    },
+    "reports/{reportId}": {
+      "schema": "Report",
+      "description": "Submissions and queries escalated to the Admin desk."
+    },
+    "announcements/{id}": {
+      "schema": "Announcement",
+      "description": "Global administrator announcement documents."
+    }
+  }
+}
